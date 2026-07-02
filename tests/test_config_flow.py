@@ -12,4 +12,4 @@ async def test_config_flow_user_step_aborts_not_supported() -> None:
     result = await flow.async_step_user()
 
     assert result["type"] == "abort"
-    assert result["reason"] == "not_supported"
+    assert result["reason"] == "This integration is configured via YAML only."

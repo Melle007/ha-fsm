@@ -1,0 +1,15 @@
+[project]
+name = "fsm"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+markers = [
+    "stress: heavy runtime stress tests intended for local profiling",
+]
+filterwarnings = [
+    "ignore::pytest.PytestRemovedIn9Warning",
+]
