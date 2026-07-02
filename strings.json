@@ -1,0 +1,8 @@
+{
+  "title": "Finite State Machine",
+  "config": {
+    "abort": {
+      "not_supported": "This integration is YAML-first and does not currently support creating FSMs from the UI."
+    }
+  }
+}

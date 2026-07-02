@@ -1,0 +1,43 @@
+trigger:
+  name: Trigger FSM transition
+  description: Trigger a transition on a finite state machine.
+  fields:
+    fsm_id:
+      description: Stable FSM id from the configuration.
+      example: melvin_nanoleaf_co2_alarm_fsm
+      selector:
+        text:
+    entity_id:
+      description: Alternative entity id target for the FSM.
+      example: sensor.test_alarm
+      selector:
+        entity:
+          domain: select
+    trigger_id:
+      description: The trigger ID defined in the FSM configuration.
+      example: co2_high
+      required: true
+      selector:
+        text:
+
+set_state:
+  name: Set FSM state
+  description: Force the FSM into a specific state.
+  fields:
+    fsm_id:
+      description: Stable FSM id from the configuration.
+      example: melvin_nanoleaf_co2_alarm_fsm
+      selector:
+        text:
+    entity_id:
+      description: Alternative entity id target for the FSM.
+      example: sensor.test_alarm
+      selector:
+        entity:
+          domain: select
+    state:
+      description: The target state for the FSM.
+      example: ALERT
+      required: true
+      selector:
+        text:
