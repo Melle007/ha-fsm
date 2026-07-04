@@ -354,7 +354,7 @@ Each FSM entity exposes diagnostics such as:
 - `initialized`
 - `trigger_setup_complete`
 - `trigger_setup_ok`
-- `restored`
+- `state_restored`
 - `last_error`
 - `last_action_error`
 

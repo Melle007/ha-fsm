@@ -53,7 +53,7 @@ class FSMRuntime:
 
         self.initialized: bool = False
         self.trigger_setup_complete: bool = False
-        self.restored: bool = False
+        self.state_restored: bool = False
         self.last_error: str | None = None
         self.last_action_error: str | None = None
         self.trigger_attach_success_count: int = 0
@@ -199,14 +199,14 @@ class FSMRuntime:
         if self.entity:
             self.entity.async_write_ha_state()
 
-    async def async_initialize(self, restored_state: str | None) -> None:
+    async def async_initialize(self, state_restored_state: str | None) -> None:
         async with self._lock:
-            if restored_state in self.config.states:
-                self.state = restored_state
-                self.restored = True
+            if state_restored_state in self.config.states:
+                self.state = state_restored_state
+                self.state_restored = True
             else:
                 self.state = self.config.initial_state
-                self.restored = False
+                self.state_restored = False
 
             self.initialized = True
 

@@ -21,7 +21,7 @@ from .const import (
     ATTR_MATCH_PRECEDENCE,
     ATTR_PREVIOUS_STATE,
     ATTR_READY,
-    ATTR_RESTORED,
+    ATTR_STATE_RESTORED,
     ATTR_STATES,
     ATTR_TRANSITION_COUNT,
     ATTR_TRANSITIONS_SUMMARY,
@@ -76,7 +76,7 @@ class FSMEntity(SelectEntity, RestoreEntity):
             ATTR_TRIGGER_SETUP_COMPLETE: self.runtime.trigger_setup_complete,
             ATTR_TRIGGER_SETUP_OK: self.runtime.trigger_setup_ok,
             ATTR_MATCH_PRECEDENCE: self.runtime.match_precedence,
-            ATTR_RESTORED: self.runtime.restored,
+            ATTR_STATE_RESTORED: self.runtime.state_restored,
             ATTR_LAST_ERROR: self.runtime.last_error,
             ATTR_LAST_ACTION_ERROR: self.runtime.last_action_error,
             ATTR_TRIGGER_ATTACH_SUCCESS_COUNT: self.runtime.trigger_attach_success_count,
@@ -95,8 +95,8 @@ class FSMEntity(SelectEntity, RestoreEntity):
             await self.runtime.async_initialize(None)
         else:
             last_state = await self.async_get_last_state()
-            restored = last_state.state if last_state is not None else None
-            await self.runtime.async_initialize(restored)
+            state_restored = last_state.state if last_state is not None else None
+            await self.runtime.async_initialize(state_restored)
 
         if self.runtime.trigger_manager is not None:
             await self.runtime.trigger_manager.async_setup()
