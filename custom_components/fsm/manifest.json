@@ -1,7 +1,7 @@
 {
   "domain": "fsm",
   "name": "Finite State Machine (FSM)",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "config_flow": true,
   "integration_type": "helper",
   "codeowners": ["@Melle007"],

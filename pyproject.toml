@@ -11,5 +11,5 @@ markers = [
     "stress: heavy runtime stress tests intended for local profiling",
 ]
 filterwarnings = [
-    "ignore::pytest.PytestRemovedIn9Warning",
+    "ignore::DeprecationWarning",
 ]
