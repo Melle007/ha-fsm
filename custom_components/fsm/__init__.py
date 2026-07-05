@@ -23,16 +23,15 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
     created_fsm_ids: list[str] = []
 
-    try:
-        fsm_configs = parse_fsm_configs(config)
-        for fsm_config in fsm_configs:
+    fsm_configs = parse_fsm_configs(config)
+    for fsm_config in fsm_configs:
+        try:
             entity = register_fsm(hass, fsm_config, from_yaml=True)
-            if entity is not None:
-                created_fsm_ids.append(fsm_config.id)
-    except Exception:
-        _LOGGER.exception("Failed to set up YAML FSM configuration")
-        await async_unload_all(hass)
-        return False
+        except Exception:
+            _LOGGER.exception("Failed to register FSM '%s'; skipping", fsm_config.id)
+            continue
+        if entity is not None:
+            created_fsm_ids.append(fsm_config.id)
 
     if not created_fsm_ids:
         return True

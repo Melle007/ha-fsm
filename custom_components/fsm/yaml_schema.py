@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -30,6 +31,9 @@ from .const import (
     RESERVED_VARIABLE_NAMES,
 )
 from .models import FSMConfig, TransitionConfig, TriggerConfig
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _validate_action_item(value: Any) -> dict[str, Any]:
@@ -107,7 +111,15 @@ FSM_YAML_SCHEMA = vol.Schema(
 
 def _state_names(raw_states: Any) -> list[str]:
     if isinstance(raw_states, dict):
-        return list(raw_states)
+        state_keys = list(raw_states)
+        non_string_keys = [k for k in state_keys if not isinstance(k, str)]
+        if non_string_keys:
+            raise vol.Invalid(
+                f"FSM state names must be strings. "
+                f"YAML may have coerced '{non_string_keys[0]}' (e.g. 'ON' or 'OFF' as a YAML keyword). "
+                f"Quote your state names: \"ON\"."
+            )
+        return state_keys
     return list(raw_states)
 
 
@@ -235,9 +247,14 @@ def _parse_fsm_item(item: dict[str, Any]) -> FSMConfig:
         )
 
     if initial_state not in states:
-        raise vol.Invalid(
-            f"FSM '{item[CONF_ID]}': initial_state '{initial_state}' not in states"
-        )
+        msg = f"FSM '{item[CONF_ID]}': initial_state '{initial_state}' not in states"
+        if initial_state in ("True", "False"):
+            msg += (
+                f". Did you accidentally use a YAML boolean? "
+                f"Use a valid state name like '{states[0]}'."
+            )
+        msg += f" Available states: {', '.join(states)}"
+        raise vol.Invalid(msg)
 
     trigger_ids: set[str] = set()
     triggers: list[TriggerConfig] = []
@@ -343,7 +360,16 @@ def _parse_fsm_item(item: dict[str, Any]) -> FSMConfig:
 
 def parse_fsm_configs(raw_config: dict[str, Any]) -> list[FSMConfig]:
     cfg = FSM_YAML_SCHEMA(raw_config)
-    return [_parse_fsm_item(item) for item in cfg[CONF_FSM]]
+    results: list[FSMConfig] = []
+    for item in cfg[CONF_FSM]:
+        try:
+            results.append(parse_fsm_config_item(item))
+        except vol.Invalid as err:
+            fsm_id = item.get(CONF_ID, "<unknown>")
+            _LOGGER.warning("Skipping FSM '%s': %s", fsm_id, err)
+    if not results:
+        _LOGGER.warning("No valid FSM configurations found")
+    return results
 
 
 def parse_fsm_config_item(item: dict[str, Any]) -> FSMConfig:
