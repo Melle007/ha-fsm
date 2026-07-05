@@ -56,33 +56,41 @@ class FSMEntity(SelectEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {
+        attributes: dict[str, Any] = {
             ATTR_FSM_ID: self.runtime.config.id,
-            ATTR_STATES: self.runtime.config.states,
-            ATTR_INITIAL_STATE: self.runtime.config.initial_state,
-            ATTR_CURRENT_STATE: self.runtime.state,
-            ATTR_PREVIOUS_STATE: self.runtime.previous_state,
-            ATTR_LAST_TRIGGER_ID: self.runtime.last_trigger_id,
-            ATTR_LAST_TRANSITION: self.runtime.last_transition,
-            ATTR_LAST_TRANSITION_AT: self.runtime.last_transition_at.isoformat()
-            if isinstance(self.runtime.last_transition_at, datetime)
-            else None,
-            ATTR_TRANSITION_COUNT: self.runtime.transition_count,
-            ATTR_TRANSITIONS_SUMMARY: self.runtime.transitions_summary,
-            ATTR_AVAILABLE_TRIGGER_IDS: self.runtime.available_trigger_ids,
-            ATTR_CANDIDATE_TRANSITIONS: self.runtime.candidate_transitions,
             ATTR_READY: self.runtime.ready,
-            ATTR_INITIALIZED: self.runtime.initialized,
-            ATTR_TRIGGER_SETUP_COMPLETE: self.runtime.trigger_setup_complete,
-            ATTR_TRIGGER_SETUP_OK: self.runtime.trigger_setup_ok,
-            ATTR_MATCH_PRECEDENCE: self.runtime.match_precedence,
-            ATTR_STATE_RESTORED: self.runtime.state_restored,
             ATTR_LAST_ERROR: self.runtime.last_error,
             ATTR_LAST_ACTION_ERROR: self.runtime.last_action_error,
-            ATTR_TRIGGER_ATTACH_SUCCESS_COUNT: self.runtime.trigger_attach_success_count,
-            ATTR_TRIGGER_ATTACH_FAILURE_COUNT: self.runtime.trigger_attach_failure_count,
-            ATTR_TRIGGER_ATTACH_ERRORS: self.runtime.trigger_attach_errors,
         }
+
+        if self.runtime.config.debug:
+            attributes.update(
+                {
+                    ATTR_CURRENT_STATE: self.runtime.state,
+                    ATTR_PREVIOUS_STATE: self.runtime.previous_state,
+                    ATTR_LAST_TRIGGER_ID: self.runtime.last_trigger_id,
+                    ATTR_LAST_TRANSITION: self.runtime.last_transition,
+                    ATTR_LAST_TRANSITION_AT: self.runtime.last_transition_at.isoformat()
+                    if isinstance(self.runtime.last_transition_at, datetime)
+                    else None,
+                    ATTR_TRANSITION_COUNT: self.runtime.transition_count,
+                    ATTR_STATES: self.runtime.config.states,
+                    ATTR_INITIAL_STATE: self.runtime.config.initial_state,
+                    ATTR_TRANSITIONS_SUMMARY: self.runtime.transitions_summary,
+                    ATTR_AVAILABLE_TRIGGER_IDS: self.runtime.available_trigger_ids,
+                    ATTR_CANDIDATE_TRANSITIONS: self.runtime.candidate_transitions,
+                    ATTR_INITIALIZED: self.runtime.initialized,
+                    ATTR_TRIGGER_SETUP_COMPLETE: self.runtime.trigger_setup_complete,
+                    ATTR_TRIGGER_SETUP_OK: self.runtime.trigger_setup_ok,
+                    ATTR_MATCH_PRECEDENCE: self.runtime.match_precedence,
+                    ATTR_STATE_RESTORED: self.runtime.state_restored,
+                    ATTR_TRIGGER_ATTACH_SUCCESS_COUNT: self.runtime.trigger_attach_success_count,
+                    ATTR_TRIGGER_ATTACH_FAILURE_COUNT: self.runtime.trigger_attach_failure_count,
+                    ATTR_TRIGGER_ATTACH_ERRORS: self.runtime.trigger_attach_errors,
+                }
+            )
+
+        return attributes
 
     async def async_select_option(self, option: str) -> None:
         await self.runtime.async_force_state(option)

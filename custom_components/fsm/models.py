@@ -28,6 +28,7 @@ class FSMConfig:
     states: list[str]
     initial_state: str
     restore_state: bool = True
+    debug: bool = False
     triggers: list[TriggerConfig] = field(default_factory=list)
     transitions: list[TransitionConfig] = field(default_factory=list)
     variables: dict[str, Any] = field(default_factory=dict)

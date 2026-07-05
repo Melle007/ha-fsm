@@ -8,6 +8,7 @@ from homeassistant.helpers import config_validation as cv
 from .action_validation import normalize_action_item, normalize_actions
 from .const import (
     CONF_ACTIONS,
+    CONF_DEBUG,
     CONF_EVALUATE_ON_START,
     CONF_FSM,
     CONF_FROM,
@@ -70,6 +71,7 @@ FSM_YAML_SCHEMA = vol.Schema(
                 ),
                 vol.Required(CONF_INITIAL_STATE): cv.string,
                 vol.Optional(CONF_RESTORE_STATE, default=True): cv.boolean,
+                vol.Optional(CONF_DEBUG, default=False): cv.boolean,
                 vol.Optional(CONF_EVALUATE_ON_START, default=False): cv.boolean,
                 vol.Required(CONF_TRIGGERS): vol.All(
                     [_trigger_schema], vol.Length(min=1)
@@ -331,6 +333,7 @@ def _parse_fsm_item(item: dict[str, Any]) -> FSMConfig:
         states=states,
         initial_state=initial_state,
         restore_state=item[CONF_RESTORE_STATE],
+        debug=item[CONF_DEBUG],
         triggers=triggers,
         transitions=transitions,
         variables=variables,

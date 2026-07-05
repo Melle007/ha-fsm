@@ -196,6 +196,14 @@ restore_state: true
 
 When enabled, Home Assistant restore state is used if the previous state is still valid. Otherwise the FSM starts from `initial_state`.
 
+## Debug attributes
+
+`debug` defaults to `false`. In normal operation the entity exposes only compact runtime attributes. Set `debug: true` on an FSM to include additional diagnostic attributes.
+
+```yaml
+debug: true
+```
+
 ## Variables and templates
 
 Optional `variables:` define reusable values that are available to guard templates, actions, and other variables.
@@ -336,27 +344,36 @@ These are useful for debugging or building automations around FSM behavior.
 
 ## Entity attributes
 
-Each FSM entity exposes diagnostics such as:
+Each FSM entity exposes a minimal set of runtime attributes:
 
 - `fsm_id`
-- `states`
-- `initial_state`
+- `ready`
+- `last_error`
+- `last_action_error`
+
+`current_state` is also visible as the entity's `select` value.
+
+With `debug: true`, the entity also exposes all additional diagnostic attributes:
+
 - `current_state`
 - `previous_state`
 - `last_trigger_id`
 - `last_transition`
 - `last_transition_at`
 - `transition_count`
+- `states`
+- `initial_state`
 - `transitions_summary`
 - `available_trigger_ids`
 - `candidate_transitions`
-- `ready`
 - `initialized`
 - `trigger_setup_complete`
 - `trigger_setup_ok`
+- `match_precedence`
 - `state_restored`
-- `last_error`
-- `last_action_error`
+- `trigger_attach_success_count`
+- `trigger_attach_failure_count`
+- `trigger_attach_errors`
 
 ## Limitations
 

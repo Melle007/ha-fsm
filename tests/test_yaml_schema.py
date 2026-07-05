@@ -58,8 +58,26 @@ def test_parse_fsm_config_item_valid_config_returns_fsm_config() -> None:
 
     assert config.id == "test_fsm"
     assert config.initial_state == "idle"
+    assert config.debug is False
     assert len(config.transitions) == 1
     assert config.variables == {"x": 1}
+
+
+def test_parse_fsm_config_item_accepts_debug_flag() -> None:
+    config = parse_fsm_config_item(
+        {
+            "id": "test_fsm",
+            "name": "Test FSM",
+            "states": ["idle", "active"],
+            "initial_state": "idle",
+            "debug": True,
+            "triggers": [{"id": "go", "platform": "event", "event_type": "go"}],
+            "transitions": [{"from": "idle", "to": "active", "trigger_id": "go"}],
+            "variables": {},
+        }
+    )
+
+    assert config.debug is True
 
 
 def test_parse_fsm_config_item_allows_uuid_fsm_id() -> None:

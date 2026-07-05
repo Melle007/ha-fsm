@@ -1,0 +1,237 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FSM Configuration Array",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "name", "states", "initial_state", "triggers"],
+    "properties": {
+      "id": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Stable FSM identifier. UUIDs and other non-empty string identifiers are allowed."
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "states": {
+        "oneOf": [
+          {
+            "type": "array",
+            "description": "Legacy state list. Use with top-level transitions.",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          { "$ref": "#/definitions/stateMap" }
+        ]
+      },
+      "initial_state": {
+        "type": "string",
+        "minLength": 1
+      },
+      "restore_state": {
+        "type": "boolean",
+        "default": true
+      },
+      "debug": {
+        "type": "boolean",
+        "default": false,
+        "description": "When true, exposes additional diagnostic attributes on the entity."
+      },
+      "evaluate_on_start": {
+        "type": "boolean",
+        "default": false
+      },
+      "triggers": {
+        "type": "array",
+        "minItems": 1,
+        "description": "Raw Home Assistant triggers. Multiple trigger definitions may share the same id, matching Home Assistant behavior.",
+        "items": {
+          "type": "object",
+          "required": ["id", "platform"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "platform": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "global": {
+        "$ref": "#/definitions/stateBody",
+        "description": "Wildcard transitions that apply from any state. Exact state transitions are evaluated before global transitions."
+      },
+      "transitions": {
+        "type": "array",
+        "description": "Legacy flat transition table. Kept during migration; prefer state-centric states.<STATE>.on.",
+        "items": { "$ref": "#/definitions/legacyTransition" }
+      },
+      "variables": {
+        "type": "object",
+        "default": {},
+        "description": "Ordered variables. Variables are rendered once in YAML/object order; later variables may reference earlier variables."
+      }
+    }
+  },
+  "definitions": {
+    "stateMap": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "null" },
+          { "$ref": "#/definitions/stateBody" }
+        ]
+      }
+    },
+    "stateBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "on": {
+          "oneOf": [
+            { "$ref": "#/definitions/onMap" },
+            { "$ref": "#/definitions/onList" }
+          ]
+        }
+      }
+    },
+    "onMap": {
+      "type": "object",
+      "description": "Map of trigger_id to one transition candidate or ordered transition candidates.",
+      "additionalProperties": {
+        "oneOf": [
+          { "$ref": "#/definitions/stateTransition" },
+          {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/definitions/stateTransition" }
+          }
+        ]
+      }
+    },
+    "onList": {
+      "type": "array",
+      "description": "Ordered transition handlers. Each item must include trigger_id.",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/stateTransitionWithTrigger" }
+    },
+    "stateTransition": {
+      "type": "object",
+      "required": ["to"],
+      "additionalProperties": false,
+      "properties": {
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guard": { "type": "string" },
+        "actions": {
+          "type": "array",
+          "default": [],
+          "items": { "$ref": "#/definitions/action" }
+        }
+      }
+    },
+    "stateTransitionWithTrigger": {
+      "type": "object",
+      "required": ["trigger_id", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "trigger_id": { "$ref": "#/definitions/triggerRef" },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guard": { "type": "string" },
+        "actions": {
+          "type": "array",
+          "default": [],
+          "items": { "$ref": "#/definitions/action" }
+        }
+      }
+    },
+    "legacyTransition": {
+      "type": "object",
+      "required": ["from", "to", "trigger_id"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "State name or '*' for wildcard matching"
+            },
+            {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1
+            }
+          ]
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trigger_id": { "$ref": "#/definitions/triggerRef" },
+        "guard": { "type": "string" },
+        "actions": {
+          "type": "array",
+          "default": [],
+          "items": { "$ref": "#/definitions/action" }
+        }
+      }
+    },
+    "triggerRef": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Trigger id from triggers, or '__startup__' for startup evaluation"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      ]
+    },
+    "action": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": { "type": "object" },
+        "data": { "type": "object" },
+        "alias": { "type": "string" },
+        "enabled": { "type": ["boolean", "string"] },
+        "continue_on_error": { "type": "boolean" },
+        "metadata": { "type": "object" }
+      },
+      "additionalProperties": true,
+      "not": {
+        "anyOf": [
+          { "required": ["service"] },
+          { "required": ["service_template"] }
+        ]
+      }
+    }
+  }
+}
