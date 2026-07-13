@@ -21,17 +21,7 @@ Each configured FSM is exposed as a Home Assistant `select` entity. Triggers det
 
 ## Installation
 
-### Manual
-
-1. Copy this folder to:
-
-   ```text
-   <config>/custom_components/fsm
-   ```
-
-2. Restart Home Assistant.
-3. Add an `fsm:` section to `configuration.yaml`.
-4. Restart Home Assistant again after changing YAML configuration.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Melle007&repository=ha-fsm)
 
 ### HACS custom repository
 
@@ -43,6 +33,18 @@ Until this integration is published as a default HACS repository:
 4. Add the GitHub repository URL.
 5. Select category **Integration**.
 6. Install and restart Home Assistant.
+
+### Manual
+
+1. Copy this folder to:
+
+   ```text
+   <config>/custom_components/fsm
+   ```
+
+2. Restart Home Assistant.
+3. Add an `fsm:` section to `configuration.yaml`.
+4. Restart Home Assistant again after changing YAML configuration.
 
 ## Minimal example
 
