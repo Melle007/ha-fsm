@@ -16,5 +16,5 @@ jobs:
     name: Hassfest
     runs-on: "ubuntu-latest"
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: "actions/checkout@main"
       - uses: home-assistant/actions/hassfest@master
