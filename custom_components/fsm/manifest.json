@@ -1,11 +1,11 @@
 {
   "domain": "fsm",
   "name": "Finite State Machine (FSM)",
-  "version": "1.2.0",
-  "config_flow": true,
   "codeowners": ["@Melle007"],
+  "config_flow": true,
   "documentation": "https://github.com/Melle007/ha-fsm",
   "issue_tracker": "https://github.com/Melle007/ha-fsm/issues",
   "iot_class": "calculated",
-  "requirements": []
+  "requirements": [],
+  "version": "1.2.0"
 }

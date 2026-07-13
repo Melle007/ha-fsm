@@ -21,11 +21,13 @@ from .manager import (
     register_fsm,
 )
 from .services import async_register_services
-from .yaml_schema import parse_fsm_config_item
+from .yaml_schema import FSM_YAML_SCHEMA, parse_fsm_config_item
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [PLATFORM_SELECT]
+
+CONFIG_SCHEMA = FSM_YAML_SCHEMA
 
 
 async def _async_import_config(
