@@ -1,8 +1,14 @@
 {
   "title": "Finite State Machine",
   "config": {
+    "step": {
+      "user": {
+        "title": "FSM is YAML-configured",
+        "description": "This integration is configured via YAML only. Please add FSMs to your `configuration.yaml`."
+      }
+    },
     "abort": {
-      "yaml_only": "This integration is configured via YAML only. Please add FSMs to your configuration.yaml (see https://github.com/Melle007/ha-fsm for setup instructions).",
+      "yaml_only": "This integration is configured via YAML only. Please add FSMs to your `configuration.yaml`.",
       "already_configured": "This FSM is already configured.",
       "not_supported": "This integration is YAML-first and does not currently support creating FSMs from the UI."
     }
