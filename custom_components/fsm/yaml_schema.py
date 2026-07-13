@@ -124,9 +124,19 @@ def _state_names(raw_states: Any) -> list[str]:
 
 
 def _get_on_handlers(raw_config: dict[str, Any]) -> Any:
+    # 1. Standard: quoted "on" im YAML
     if CONF_ON in raw_config:
         return raw_config[CONF_ON]
-    return raw_config.get(True)
+    # 2. YAML-Boolean True (vor JSON-Roundtrip)
+    if True in raw_config:
+        return raw_config[True]
+    # 3. Nach JSON-Roundtrip: True → "true"
+    if "true" in raw_config:
+        return raw_config["true"]
+    # 4. Failsafe für andere Serialisierungen
+    if "True" in raw_config:
+        return raw_config["True"]
+    return None
 
 
 def _normalize_on_handlers(

@@ -26,6 +26,8 @@ DATA_RUNTIMES = "runtimes"
 DATA_ENTITIES = "entities"
 DATA_PENDING_ENTITIES = "pending_entities"
 
+CONF_ENTRY_DATA_FSM_CONFIG = "fsm_config"
+
 SERVICE_TRIGGER = "trigger"
 SERVICE_SET_STATE = "set_state"
 SERVICE_FIELD_ENTITY_ID = "entity_id"

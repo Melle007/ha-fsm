@@ -3,7 +3,6 @@
   "name": "Finite State Machine (FSM)",
   "version": "1.1.0",
   "config_flow": true,
-  "integration_type": "helper",
   "codeowners": ["@Melle007"],
   "documentation": "https://github.com/Melle007/ha-fsm",
   "issue_tracker": "https://github.com/Melle007/ha-fsm/issues",
