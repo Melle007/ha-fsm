@@ -168,6 +168,7 @@ def build_fsm_context(
         hass,
         fsm_runtime.config.variables,
         raw_variables,
+        iterative=True,
     )
 
     return {
