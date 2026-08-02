@@ -341,6 +341,39 @@ def test_parse_fsm_config_item_rejects_yaml_bool_coerced_state_keys() -> None:
         parse_fsm_config_item(config)
 
 
+def test_parse_fsm_config_item_rejects_unquoted_yaml_boolean_state_list() -> None:
+    config = {
+        "id": "test_fsm",
+        "name": "Test FSM",
+        "states": [False, True],
+        "initial_state": False,
+        "triggers": [{"id": "go", "platform": "event", "event_type": "go"}],
+        "transitions": [{"from": False, "to": True, "trigger_id": "go"}],
+    }
+
+    with pytest.raises(vol.Invalid, match="state names must be strings"):
+        parse_fsm_config_item(config)
+
+
+@pytest.mark.parametrize("trigger_id", [1, [], ["go", 2]])
+def test_parse_fsm_config_item_rejects_invalid_state_centric_trigger_id(
+    trigger_id: object,
+) -> None:
+    config = {
+        "id": "test_fsm",
+        "name": "Test FSM",
+        "states": {
+            "idle": {"on": [{"trigger_id": trigger_id, "to": "active"}]},
+            "active": {},
+        },
+        "initial_state": "idle",
+        "triggers": [{"id": "go", "platform": "event", "event_type": "go"}],
+    }
+
+    with pytest.raises(vol.Invalid, match="trigger_id must be"):
+        parse_fsm_config_item(config)
+
+
 def test_parse_fsm_configs_skips_invalid_fsm() -> None:
     raw_config = {
         "fsm": [
@@ -367,3 +400,85 @@ def test_parse_fsm_configs_skips_invalid_fsm() -> None:
     configs = parse_fsm_configs(raw_config)
     assert len(configs) == 1
     assert configs[0].id == "good_fsm"
+
+
+def test_parse_fsm_config_item_rejects_unknown_fsm_options() -> None:
+    with pytest.raises(vol.Invalid, match="extra keys not allowed"):
+        parse_fsm_config_item(
+            {
+                "id": "test_fsm",
+                "name": "Test FSM",
+                "states": ["idle", "active"],
+                "initial_state": "idle",
+                "triggers": [{"id": "go", "platform": "event", "event_type": "go"}],
+                "transitions": [
+                    {"from": "idle", "to": "active", "trigger_id": "go"}
+                ],
+                "variables": {},
+                "restore_states": True,
+            }
+        )
+
+
+def test_fsm_schema_preserves_unrelated_home_assistant_config() -> None:
+    configs = parse_fsm_configs(
+        {
+            "homeassistant": {"name": "Test"},
+            "fsm": [
+                {
+                    "id": "test_fsm",
+                    "name": "Test FSM",
+                    "states": ["idle", "active"],
+                    "initial_state": "idle",
+                    "triggers": [
+                        {"id": "go", "platform": "event", "event_type": "go"}
+                    ],
+                    "transitions": [
+                        {"from": "idle", "to": "active", "trigger_id": "go"}
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert [config.id for config in configs] == ["test_fsm"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "location"),
+    [
+        ("global", {"onn": {"go": {"to": "active"}}}, "global"),
+        (
+            "states",
+            {"idle": {"onn": {"go": {"to": "active"}}}, "active": {}},
+            "state 'idle'",
+        ),
+        (
+            "states",
+            {
+                "idle": {
+                    "on": {"go": {"to": "active", "gaurd": "{{ true }}"}}
+                },
+                "active": {},
+            },
+            "transition from 'idle'",
+        ),
+    ],
+)
+def test_parse_fsm_config_item_rejects_unknown_state_centric_options(
+    field: str,
+    value: dict,
+    location: str,
+) -> None:
+    item = {
+        "id": "test_fsm",
+        "name": "Test FSM",
+        "states": ["idle", "active"],
+        "initial_state": "idle",
+        "triggers": [{"id": "go", "platform": "event", "event_type": "go"}],
+        "transitions": [{"from": "idle", "to": "active", "trigger_id": "go"}],
+    }
+    item[field] = value
+
+    with pytest.raises(vol.Invalid, match=location):
+        parse_fsm_config_item(item)

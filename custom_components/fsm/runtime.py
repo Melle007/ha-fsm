@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 from collections import defaultdict
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -26,6 +27,11 @@ from .models import FSMConfig, TransitionConfig
 from .templating import build_fsm_context
 
 _LOGGER = logging.getLogger(__name__)
+
+_ACTIVE_TRANSITIONS: ContextVar[frozenset[int]] = ContextVar(
+    "fsm_active_transitions",
+    default=frozenset(),
+)
 
 
 @dataclass(slots=True)
@@ -61,6 +67,10 @@ class FSMRuntime:
         self.trigger_attach_errors: list[str] = []
 
         self._lock = asyncio.Lock()
+        # Serialize trigger evaluation through action execution and commit. Keeping
+        # this separate from the state lock allows an action to call set_state
+        # without deadlocking the runtime.
+        self._transition_lock = asyncio.Lock()
         self._transition_index: dict[tuple[str, str], list[int]] = defaultdict(list)
         self._wildcard_transition_index: dict[str, list[int]] = defaultdict(list)
         self._compiled_transitions: list[_CompiledTransition] = []
@@ -237,6 +247,32 @@ class FSMRuntime:
         trigger_id: str,
         trigger_payload: dict[str, Any] | None = None,
         context: Context | None = None,
+        *,
+        allow_queued_reentry: bool = False,
+    ) -> None:
+        """Process a trigger atomically with respect to other triggers."""
+        runtime_key = id(self)
+        active_transitions = _ACTIVE_TRANSITIONS.get()
+        if runtime_key in active_transitions and not allow_queued_reentry:
+            raise FSMRuntimeError(
+                f"FSM '{self.config.id}' cannot trigger itself while a transition "
+                "action is still running"
+            )
+
+        token = _ACTIVE_TRANSITIONS.set(
+            (active_transitions - {runtime_key}) | {runtime_key}
+        )
+        try:
+            async with self._transition_lock:
+                await self._async_handle_trigger(trigger_id, trigger_payload, context)
+        finally:
+            _ACTIVE_TRANSITIONS.reset(token)
+
+    async def _async_handle_trigger(
+        self,
+        trigger_id: str,
+        trigger_payload: dict[str, Any] | None,
+        context: Context | None,
     ) -> None:
         from .guard import evaluate_guard
 

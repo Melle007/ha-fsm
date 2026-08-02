@@ -116,6 +116,7 @@ class TriggerManager:
                 trigger_id,
                 payload,
                 context,
+                allow_queued_reentry=True,
             )
 
         return await async_initialize_triggers(
@@ -155,6 +156,7 @@ class TriggerManager:
                         }
                     },
                     event.context,
+                    allow_queued_reentry=True,
                 )
             )
 
