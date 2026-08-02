@@ -35,6 +35,19 @@ from .models import FSMConfig, TransitionConfig, TriggerConfig
 
 _LOGGER = logging.getLogger(__name__)
 
+_ON_CONTAINER_KEYS = {CONF_ON, True, "true", "True"}
+_ON_HANDLER_KEYS = {CONF_TRIGGER_ID, CONF_TO, CONF_GUARD, CONF_ACTIONS}
+
+
+def _state_list_schema(value: Any) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise vol.Invalid("states must be a non-empty list or mapping")
+    if any(not isinstance(state, str) for state in value):
+        raise vol.Invalid(
+            "FSM state names must be strings; quote YAML keywords such as ON and OFF"
+        )
+    return value
+
 
 def _validate_action_item(value: Any) -> dict[str, Any]:
     try:
@@ -60,51 +73,62 @@ def _trigger_schema(value: dict[str, Any]) -> dict[str, Any]:
     if CONF_PLATFORM not in value:
         raise vol.Invalid("Trigger requires 'platform'")
 
+    if not isinstance(value[CONF_ID], str) or not value[CONF_ID]:
+        raise vol.Invalid("Trigger 'id' must be a non-empty string")
+
+    if not isinstance(value[CONF_PLATFORM], str) or not value[CONF_PLATFORM]:
+        raise vol.Invalid("Trigger 'platform' must be a non-empty string")
+
     return value
 
 
-FSM_YAML_SCHEMA = vol.Schema(
+FSM_ITEM_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_FSM): [
-            {
-                vol.Required(CONF_ID): cv.string,
-                vol.Required(CONF_NAME): cv.string,
-                vol.Required(CONF_STATES): vol.Any(
-                    vol.All([cv.string], vol.Length(min=1)),
-                    vol.All(dict, vol.Length(min=1)),
-                ),
-                vol.Required(CONF_INITIAL_STATE): cv.string,
-                vol.Optional(CONF_RESTORE_STATE, default=True): cv.boolean,
-                vol.Optional(CONF_DEBUG, default=False): cv.boolean,
-                vol.Optional(CONF_EVALUATE_ON_START, default=False): cv.boolean,
-                vol.Required(CONF_TRIGGERS): vol.All(
-                    [_trigger_schema], vol.Length(min=1)
-                ),
-                vol.Optional(CONF_TRANSITIONS, default=[]): vol.All(
-                    [
-                        {
-                            vol.Required(CONF_FROM): vol.Any(
-                                cv.string,
-                                vol.All([cv.string], vol.Length(min=1)),
-                            ),
-                            vol.Required(CONF_TO): cv.string,
-                            vol.Required(CONF_TRIGGER_ID): vol.Any(
-                                cv.string,
-                                vol.All([cv.string], vol.Length(min=1)),
-                            ),
-                            vol.Optional(CONF_GUARD): cv.string,
-                            vol.Optional(CONF_ACTIONS, default=[]): vol.All(
-                                list,
-                                [_validate_action_item],
-                            ),
-                        }
-                    ],
-                ),
-                vol.Optional(CONF_VARIABLES, default={}): dict,
-                vol.Optional(CONF_GLOBAL, default={}): dict,
-            }
-        ]
+        vol.Required(CONF_ID): cv.string,
+        vol.Required(CONF_NAME): cv.string,
+        vol.Required(CONF_STATES): vol.Any(
+            _state_list_schema,
+            vol.All(dict, vol.Length(min=1)),
+        ),
+        vol.Required(CONF_INITIAL_STATE): cv.string,
+        vol.Optional(CONF_RESTORE_STATE, default=True): cv.boolean,
+        vol.Optional(CONF_DEBUG, default=False): cv.boolean,
+        vol.Optional(CONF_EVALUATE_ON_START, default=False): cv.boolean,
+        vol.Required(CONF_TRIGGERS): vol.All(
+            [_trigger_schema], vol.Length(min=1)
+        ),
+        vol.Optional(CONF_TRANSITIONS, default=[]): vol.All(
+            [
+                {
+                    vol.Required(CONF_FROM): vol.Any(
+                        cv.string,
+                        vol.All([cv.string], vol.Length(min=1)),
+                    ),
+                    vol.Required(CONF_TO): cv.string,
+                    vol.Required(CONF_TRIGGER_ID): vol.Any(
+                        cv.string,
+                        vol.All([cv.string], vol.Length(min=1)),
+                    ),
+                    vol.Optional(CONF_GUARD): cv.string,
+                    vol.Optional(CONF_ACTIONS, default=[]): vol.All(
+                        list,
+                        [_validate_action_item],
+                    ),
+                }
+            ],
+        ),
+        vol.Optional(CONF_VARIABLES, default={}): dict,
+        vol.Optional(CONF_GLOBAL, default={}): dict,
     },
+    extra=vol.PREVENT_EXTRA,
+)
+
+
+# Home Assistant passes the complete configuration mapping to integrations, so
+# unrelated top-level integration keys must remain untouched. Strictness is
+# applied to each FSM definition instead.
+FSM_YAML_SCHEMA = vol.Schema(
+    {vol.Required(CONF_FSM): [FSM_ITEM_SCHEMA]},
     extra=vol.ALLOW_EXTRA,
 )
 
@@ -137,6 +161,20 @@ def _get_on_handlers(raw_config: dict[str, Any]) -> Any:
     if "True" in raw_config:
         return raw_config["True"]
     return None
+
+
+def _reject_unknown_keys(
+    fsm_id: str,
+    location: str,
+    value: dict[Any, Any],
+    allowed_keys: set[Any],
+) -> None:
+    unknown_keys = set(value) - allowed_keys
+    if unknown_keys:
+        rendered_keys = ", ".join(sorted(repr(key) for key in unknown_keys))
+        raise vol.Invalid(
+            f"FSM '{fsm_id}': unknown option(s) in {location}: {rendered_keys}"
+        )
 
 
 def _normalize_on_handlers(
@@ -180,6 +218,12 @@ def _parse_state_centric_transitions(
 
     def add_handlers(source_state: str, raw_on: Any) -> None:
         for handler in _normalize_on_handlers(item[CONF_ID], source_state, raw_on):
+            _reject_unknown_keys(
+                item[CONF_ID],
+                f"transition from '{source_state}'",
+                handler,
+                _ON_HANDLER_KEYS,
+            )
             if CONF_TO not in handler:
                 raise vol.Invalid(
                     f"FSM '{item[CONF_ID]}': transition from '{source_state}' requires 'to'"
@@ -190,11 +234,19 @@ def _parse_state_centric_transitions(
                 raise vol.Invalid(
                     f"FSM '{item[CONF_ID]}': transition from '{source_state}' requires 'trigger_id'"
                 )
-            trigger_ids_for_transition = (
-                [raw_trigger_ids]
-                if isinstance(raw_trigger_ids, str)
-                else list(raw_trigger_ids)
-            )
+            if isinstance(raw_trigger_ids, str):
+                trigger_ids_for_transition = [raw_trigger_ids]
+            elif (
+                isinstance(raw_trigger_ids, list)
+                and raw_trigger_ids
+                and all(isinstance(trigger_id, str) for trigger_id in raw_trigger_ids)
+            ):
+                trigger_ids_for_transition = raw_trigger_ids
+            else:
+                raise vol.Invalid(
+                    f"FSM '{item[CONF_ID]}': transition from '{source_state}' "
+                    "trigger_id must be a string or non-empty list of strings"
+                )
 
             if handler[CONF_TO] not in states:
                 raise vol.Invalid(
@@ -235,12 +287,24 @@ def _parse_state_centric_transitions(
                 raise vol.Invalid(
                     f"FSM '{item[CONF_ID]}': state '{state_name}' must be a mapping"
                 )
+            _reject_unknown_keys(
+                item[CONF_ID],
+                f"state '{state_name}'",
+                state_config,
+                _ON_CONTAINER_KEYS,
+            )
             add_handlers(state_name, _get_on_handlers(state_config))
 
     raw_global = item.get(CONF_GLOBAL) or {}
     if raw_global:
         if not isinstance(raw_global, dict):
             raise vol.Invalid(f"FSM '{item[CONF_ID]}': global must be a mapping")
+        _reject_unknown_keys(
+            item[CONF_ID],
+            "global",
+            raw_global,
+            _ON_CONTAINER_KEYS,
+        )
         add_handlers("*", _get_on_handlers(raw_global))
 
     return transitions

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -238,3 +239,91 @@ async def test_action_failure_keeps_old_state(runtime_config: FSMConfig) -> None
     assert runtime.transition_count == 0
     assert runtime.last_action_error == "boom"
     assert any(event_type == EVENT_ACTION_FAILED for event_type, _ in hass.bus.events)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_triggers_do_not_duplicate_stale_actions(
+    runtime_config: FSMConfig,
+) -> None:
+    """A second trigger must observe state only after the first action completes."""
+    runtime_config.transitions = [runtime_config.transitions[0]]
+    runtime = FSMRuntime(_FakeHass(), runtime_config)
+    runtime.trigger_setup_complete = True
+    runtime.initialized = True
+    first_action_started = asyncio.Event()
+    release_first_action = asyncio.Event()
+    action_calls = 0
+
+    async def _run_actions(*args, **kwargs) -> None:
+        nonlocal action_calls
+        action_calls += 1
+        first_action_started.set()
+        await release_first_action.wait()
+
+    with patch("custom_components.fsm.runtime.run_actions", side_effect=_run_actions):
+        first = asyncio.create_task(runtime.async_handle_trigger("go", {"call": 1}))
+        await first_action_started.wait()
+        second = asyncio.create_task(runtime.async_handle_trigger("go", {"call": 2}))
+        await asyncio.sleep(0)
+
+        assert action_calls == 1
+        release_first_action.set()
+        await asyncio.gather(first, second)
+
+    assert action_calls == 1
+    assert runtime.state == "active"
+    assert runtime.transition_count == 1
+
+
+@pytest.mark.asyncio
+async def test_recursive_trigger_action_fails_instead_of_deadlocking(
+    runtime_config: FSMConfig,
+) -> None:
+    runtime = FSMRuntime(_FakeHass(), runtime_config)
+    runtime.trigger_setup_complete = True
+    runtime.initialized = True
+
+    async def _trigger_same_runtime(*args, **kwargs) -> None:
+        await runtime.async_handle_trigger("go", {"recursive": True})
+
+    with patch(
+        "custom_components.fsm.runtime.run_actions",
+        side_effect=_trigger_same_runtime,
+    ):
+        await asyncio.wait_for(runtime.async_handle_trigger("go", {}), timeout=1)
+
+    assert runtime.state == "idle"
+    assert runtime.transition_count == 0
+    assert "cannot trigger itself" in runtime.last_action_error
+
+
+@pytest.mark.asyncio
+async def test_event_trigger_spawned_by_action_is_queued(
+    runtime_config: FSMConfig,
+) -> None:
+    runtime_config.transitions = [runtime_config.transitions[0]]
+    runtime = FSMRuntime(_FakeHass(), runtime_config)
+    runtime.trigger_setup_complete = True
+    runtime.initialized = True
+    queued_tasks: list[asyncio.Task] = []
+
+    async def _schedule_event_trigger(*args, **kwargs) -> None:
+        queued_tasks.append(
+            asyncio.create_task(
+                runtime.async_handle_trigger(
+                    "go",
+                    {"from_event": True},
+                    allow_queued_reentry=True,
+                )
+            )
+        )
+
+    with patch(
+        "custom_components.fsm.runtime.run_actions",
+        side_effect=_schedule_event_trigger,
+    ):
+        await runtime.async_handle_trigger("go", {})
+        await asyncio.gather(*queued_tasks)
+
+    assert runtime.state == "active"
+    assert runtime.transition_count == 1

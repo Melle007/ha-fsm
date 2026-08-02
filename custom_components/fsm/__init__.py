@@ -30,6 +30,14 @@ PLATFORMS = [PLATFORM_SELECT]
 CONFIG_SCHEMA = FSM_YAML_SCHEMA
 
 
+async def _async_update_listener(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Reload an FSM when its imported YAML config changes."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def _async_import_config(
     hass: HomeAssistant,
     config: dict[str, Any],
@@ -83,11 +91,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.debug("async_setup_entry for FSM '%s'", fsm_id)
 
-    # Detect if the YAML config was modified since the last startup.
-    # When this is a re-setup (config-entry update), the old FSM is still
-    # registered in hass.data — unregister it first, then register anew
-    # so the entity gets the updated runtime and the platforms are reloaded.
-    update = fsm_id in hass.data[DOMAIN][DATA_CONFIGS]
+    # YAML updates are handled by the config-entry update listener, which first
+    # unloads the working entry and then performs a clean setup. Never tear down
+    # an active runtime from inside setup; a duplicate setup attempt must leave
+    # the working FSM intact.
+    if fsm_id in hass.data[DOMAIN][DATA_CONFIGS]:
+        _LOGGER.error("FSM '%s' is already active; refusing duplicate setup", fsm_id)
+        return False
 
     try:
         fsm_config = parse_fsm_config_item(fsm_dict)
@@ -95,21 +105,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.exception("Failed to parse FSM config for entry '%s'", entry.entry_id)
         return False
 
-    if update:
-        _LOGGER.info(
-            "FSM '%s' YAML config changed; reloading",
-            fsm_id,
-        )
-        await async_unregister_fsm(hass, fsm_id)
-        await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
     try:
-        register_fsm(hass, fsm_config, from_yaml=False)
+        entity = register_fsm(hass, fsm_config, from_yaml=False)
     except Exception:
         _LOGGER.exception("Failed to register FSM '%s' from config entry", fsm_config.id)
         return False
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    if entity is None:
+        return False
+
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception:
+        await async_unregister_fsm(hass, fsm_id)
+        raise
+
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
 
 
@@ -118,9 +129,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     fsm_dict = entry.data[CONF_ENTRY_DATA_FSM_CONFIG]
     fsm_id = fsm_dict[CONF_ID]
 
-    await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    await async_unregister_fsm(hass, fsm_id)
-    return True
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        await async_unregister_fsm(hass, fsm_id)
+    return unload_ok
 
 
 async def async_unload(hass: HomeAssistant) -> bool:
