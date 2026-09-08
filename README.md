@@ -6,6 +6,32 @@ Use it when a Home Assistant automation is easier to model as explicit states an
 
 Each configured FSM is exposed as a Home Assistant `select` entity. Triggers determine **when** transitions are evaluated, while transitions determine **if** and **how** the FSM changes state.
 
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-%E2%89%A5%202025.1.0-blue?logo=homeassistant&logoColor=white)](https://www.home-assistant.io/)
+[![Version](https://img.shields.io/github/v/tag/Melle007/ha-fsm?label=version)](https://github.com/Melle007/ha-fsm/tags)
+[![License](https://img.shields.io/github/license/Melle007/ha-fsm)](LICENSE)
+
+## Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Minimal example](#minimal-example)
+- [Triggers](#triggers)
+- [State-centric syntax](#state-centric-syntax)
+- [Explicit transition syntax](#explicit-transition-syntax)
+- [Guards](#guards)
+- [Global wildcard transitions](#global-wildcard-transitions)
+- [Startup evaluation](#startup-evaluation)
+- [Restore behavior](#restore-behavior)
+- [Debug attributes](#debug-attributes)
+- [Variables and templates](#variables-and-templates)
+- [Actions](#actions)
+- [Services](#services)
+- [Events](#events)
+- [Entity attributes](#entity-attributes)
+- [Editor support](#editor-support)
+- [Limitations](#limitations)
+- [Getting help](#getting-help)
+
 ## Features
 
 - Define one or more finite state machines in YAML.
@@ -20,6 +46,8 @@ Each configured FSM is exposed as a Home Assistant `select` entity. Triggers det
 - Emit events for debugging and automation.
 
 ## Installation
+
+**Requirements:** Home Assistant 2025.1.0 or newer.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Melle007&repository=ha-fsm)
 
@@ -77,54 +105,66 @@ This creates a `select` entity named `Alarm Mode FSM` with the configured states
 
 When the `arm_home` event is received, the FSM transitions from `disarmed` to `armed_home`. The `disarm` trigger uses a wildcard transition (`from: "*"`) so it can return the FSM to `disarmed` from any state.
 
+## Triggers
+
+Triggers are standard Home Assistant triggers, such as `event`, `state`, or `numeric_state`. Each trigger needs an `id` that transitions reference through `trigger_id`.
+
+- A trigger only evaluates transitions that reference its `trigger_id`.
+- Multiple trigger definitions may share the same `id`. When any of the shared triggers fires, transitions referencing that id are evaluated, matching Home Assistant's behavior for triggers with the same id.
+
 ## State-centric syntax
 
 For larger state machines, transitions can be defined directly under each state instead of using a top-level `transitions:` list.
 
-In this syntax, each state's `on` section maps a `trigger_id` to one or more transitions originating from that state.
-
 ```yaml
 fsm:
-  - id: ventilation_fsm
-    name: Ventilation FSM
+  - id: heating_fsm
+    name: Heating FSM
     states:
-      idle:
+      off:
         on:
-          co2_high:
-            to: boost
+          temp_cold:
+            to: comfort
             actions:
               - action: notify.mobile_app_phone
                 data:
-                  message: "CO₂ level is high. Ventilation switched to boost."
+                  message: "It's getting cold. Heating switched to comfort."
 
-      boost:
+      comfort:
         on:
-          co2_ok:
-            to: idle
+          temp_ok:
+            to: eco
             actions:
               - action: notify.mobile_app_phone
                 data:
-                  message: "CO₂ level is normal. Ventilation returned to idle."
+                  message: "Room temperature is comfortable. Heating switched to eco."
 
-      fault: {}
+      eco: {}
 
-    initial_state: idle
+    initial_state: off
 
     triggers:
-      - id: co2_high
+      - id: temp_cold
         platform: numeric_state
-        entity_id: sensor.living_room_co2
-        above: 1200
+        entity_id: sensor.living_room_temperature
+        below: 19
 
-      - id: co2_ok
+      - id: temp_ok
         platform: numeric_state
-        entity_id: sensor.living_room_co2
-        below: 900
+        entity_id: sensor.living_room_temperature
+        above: 21
 ```
 
-Multiple candidate transitions for the same trigger are evaluated in the order they are defined. The first transition whose guard (if any) evaluates to `true` is taken.
+In this syntax, each state's `on` section maps a `trigger_id` to one or more transitions originating from that state. A state without outgoing transitions can be an empty mapping (`eco: {}`) or `null`.
 
-A trigger only evaluates transitions that reference its `trigger_id`.
+`states` accepts two forms:
+
+- a plain list of state names, used together with a top-level `transitions:` list (see [Minimal example](#minimal-example))
+- a mapping where each state carries its own `on` transitions, as shown above
+
+The `on` value itself can be a mapping of `trigger_id` to transition(s), or a list of handler entries where each entry carries its own `trigger_id` (as used in the [Startup evaluation](#startup-evaluation) example).
+
+Multiple candidate transitions for the same trigger are evaluated in the order they are defined. The first transition whose guard (if any) evaluates to `true` is taken.
 
 ## Explicit transition syntax
 
@@ -148,6 +188,12 @@ transitions:
     to: active
     trigger_id: [motion, button_pressed]
 ```
+
+## Guards
+
+A `guard` is a Jinja template (see [Explicit transition syntax](#explicit-transition-syntax)) evaluated each time its transition is a candidate. The transition is taken only when the guard evaluates to a truthy value such as `true`.
+
+If a guard template raises an error, the transition is treated as not matching: it is skipped and the error is logged.
 
 ## Global wildcard transitions
 
@@ -259,7 +305,7 @@ fsm:
             data:
               title: "{{ notification_title }}"
               message: "{{ notification_message }}"
-``` 
+```
 
 Reserved variable names are not allowed: `fsm`, `variables`, `trigger`, `trigger_id`, `transition`, `from_state`, `to_state`.
 
@@ -377,9 +423,40 @@ With `debug: true`, the entity also exposes all additional diagnostic attributes
 - `trigger_attach_failure_count`
 - `trigger_attach_errors`
 
+## Editor support
+
+A JSON Schema for the `fsm:` configuration array is provided in [`fsm.schema.json`](fsm.schema.json). Editors and linters that support JSON Schema can use it for validation and autocomplete of FSM definitions.
+
+For example, in VS Code a YAML file containing the `fsm:` entries can reference it directly:
+
+```yaml
+# yaml-language-server: $schema=./fsm.schema.json
+- id: alarm_mode_fsm
+  name: Alarm Mode FSM
+  states: [disarmed, armed_home, armed_away]
+  initial_state: disarmed
+  triggers:
+    - id: arm_home
+      platform: event
+      event_type: alarm_arm_home
+  transitions:
+    - from: disarmed
+      to: armed_home
+      trigger_id: arm_home
+```
+
+When `fsm:` is written inline in `configuration.yaml`, use the schema as a reference for the supported keys.
+
 ## Limitations
 
 - Configuration is YAML-first.
 - The UI config flow only shows a friendly unsupported message.
 - FSM definitions require a Home Assistant restart after YAML changes.
 - The FSM entity is a `select` entity; selecting an option force-sets the state.
+- Each FSM must define at least one entry under `triggers:` (even when transitions are only driven by services or the select entity) and at least one transition.
+- `initial_state` must be one of the defined states.
+- State names are used verbatim as the select entity's options: they must be unique, non-empty strings, and YAML keywords such as `ON` and `OFF` need to be quoted.
+
+## Getting help
+
+Report issues and request features on the [GitHub issue tracker](https://github.com/Melle007/ha-fsm/issues).

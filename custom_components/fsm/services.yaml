@@ -4,18 +4,18 @@ trigger:
   fields:
     fsm_id:
       description: Stable FSM id from the configuration.
-      example: melvin_nanoleaf_co2_alarm_fsm
+      example: alarm_mode_fsm
       selector:
         text:
     entity_id:
       description: Alternative entity id target for the FSM.
-      example: sensor.test_alarm
+      example: select.alarm_mode_fsm
       selector:
         entity:
           domain: select
     trigger_id:
       description: The trigger ID defined in the FSM configuration.
-      example: co2_high
+      example: arm_home
       required: true
       selector:
         text:
@@ -26,18 +26,18 @@ set_state:
   fields:
     fsm_id:
       description: Stable FSM id from the configuration.
-      example: melvin_nanoleaf_co2_alarm_fsm
+      example: alarm_mode_fsm
       selector:
         text:
     entity_id:
       description: Alternative entity id target for the FSM.
-      example: sensor.test_alarm
+      example: select.alarm_mode_fsm
       selector:
         entity:
           domain: select
     state:
       description: The target state for the FSM.
-      example: ALERT
+      example: disarmed
       required: true
       selector:
         text:
