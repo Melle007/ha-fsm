@@ -9,11 +9,13 @@ import pytest
 
 from custom_components.fsm import (
     _async_update_listener,
+    async_setup,
     async_setup_entry,
     async_unload_entry,
 )
 from custom_components.fsm.const import (
     CONF_ENTRY_DATA_FSM_CONFIG,
+    CONF_FSM,
     CONF_ID,
     DATA_CONFIGS,
     DOMAIN,
@@ -92,3 +94,95 @@ async def test_platform_setup_failure_rolls_back_registered_runtime(monkeypatch)
         await async_setup_entry(hass, entry)
 
     unregister.assert_awaited_once_with(hass, "test_fsm")
+
+
+class _FakeEntry:
+    def __init__(self, unique_id: str, entry_id: str) -> None:
+        self.unique_id = unique_id
+        self.entry_id = entry_id
+
+
+class _FakeConfigEntries:
+    def __init__(self, entries: list[_FakeEntry]) -> None:
+        self._entries = entries
+        self.removed: list[str] = []
+
+    def async_entries(self, domain: str) -> list[_FakeEntry]:
+        return self._entries
+
+    async def async_remove(self, entry_id: str) -> None:
+        self.removed.append(entry_id)
+
+
+class _FakeSetupHass:
+    def __init__(self, entries: list[_FakeEntry]) -> None:
+        self.data = {}
+        self.config_entries = _FakeConfigEntries(entries)
+        self.created_tasks: list = []
+
+    def async_create_task(self, coro, eager_start: bool = False) -> None:
+        self.created_tasks.append(coro)
+        coro.close()  # discard the coroutine to avoid "never awaited" warnings
+
+
+@pytest.mark.asyncio
+async def test_async_setup_removes_orphaned_entries(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.fsm.async_register_services", AsyncMock()
+    )
+    hass = _FakeSetupHass(
+        [_FakeEntry("keep", "entry-keep"), _FakeEntry("orphan", "entry-orphan")]
+    )
+
+    result = await async_setup(
+        hass,
+        {CONF_FSM: [{CONF_ID: "keep"}]},
+    )
+
+    assert result is True
+    assert hass.config_entries.removed == ["entry-orphan"]
+
+
+@pytest.mark.asyncio
+async def test_async_setup_keeps_matching_entries(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.fsm.async_register_services", AsyncMock()
+    )
+    hass = _FakeSetupHass([_FakeEntry("keep", "entry-keep")])
+
+    result = await async_setup(
+        hass,
+        {CONF_FSM: [{CONF_ID: "keep"}]},
+    )
+
+    assert result is True
+    assert hass.config_entries.removed == []
+
+
+@pytest.mark.asyncio
+async def test_async_setup_empty_fsm_does_not_defer_import(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.fsm.async_register_services", AsyncMock()
+    )
+    hass = _FakeSetupHass([])
+
+    result = await async_setup(hass, {CONF_FSM: []})
+
+    assert result is True
+    assert hass.created_tasks == []
+
+
+@pytest.mark.asyncio
+async def test_async_setup_defers_import_when_fsm_present(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.fsm.async_register_services", AsyncMock()
+    )
+    hass = _FakeSetupHass([])
+
+    result = await async_setup(
+        hass,
+        {CONF_FSM: [{CONF_ID: "keep"}]},
+    )
+
+    assert result is True
+    assert len(hass.created_tasks) == 1

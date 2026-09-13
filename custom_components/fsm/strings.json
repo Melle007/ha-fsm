@@ -9,8 +9,7 @@
     },
     "abort": {
       "yaml_only": "This integration is configured via YAML only. Please add FSMs to your `configuration.yaml`.",
-      "already_configured": "This FSM is already configured.",
-      "not_supported": "This integration is YAML-first and does not currently support creating FSMs from the UI."
+      "already_configured": "This FSM is already configured."
     }
   }
 }

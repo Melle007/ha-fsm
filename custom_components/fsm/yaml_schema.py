@@ -127,8 +127,15 @@ FSM_ITEM_SCHEMA = vol.Schema(
 # Home Assistant passes the complete configuration mapping to integrations, so
 # unrelated top-level integration keys must remain untouched. Strictness is
 # applied to each FSM definition instead.
+#
+# CONF_FSM is optional (defaulting to an empty list) rather than required.
+# Home Assistant validates the entire configuration mapping against this schema
+# *before* ``async_setup`` runs, so a missing ``fsm:`` section (e.g. a user who
+# has deleted every FSM) would otherwise make the whole configuration invalid
+# and prevent ``async_setup`` from ever executing. Keeping it optional means
+# ``async_setup`` still runs and can clean up now-orphaned config entries.
 FSM_YAML_SCHEMA = vol.Schema(
-    {vol.Required(CONF_FSM): [FSM_ITEM_SCHEMA]},
+    {vol.Optional(CONF_FSM, default=[]): [FSM_ITEM_SCHEMA]},
     extra=vol.ALLOW_EXTRA,
 )
 
@@ -148,16 +155,19 @@ def _state_names(raw_states: Any) -> list[str]:
 
 
 def _get_on_handlers(raw_config: dict[str, Any]) -> Any:
-    # 1. Standard: quoted "on" im YAML
+    # The ``on`` key is the trigger-handling container, but its representation
+    # depends on how the config reached us. Try each known spelling in order.
+    # 1. Standard: the literal string "on" (as written in YAML).
     if CONF_ON in raw_config:
         return raw_config[CONF_ON]
-    # 2. YAML-Boolean True (vor JSON-Roundtrip)
+    # 2. YAML boolean True before a JSON round-trip (unquoted ``on`` parses
+    #    as the boolean ``true``).
     if True in raw_config:
         return raw_config[True]
-    # 3. Nach JSON-Roundtrip: True → "true"
+    # 3. After a JSON round-trip the YAML boolean becomes the string "true".
     if "true" in raw_config:
         return raw_config["true"]
-    # 4. Failsafe für andere Serialisierungen
+    # 4. Fallback for other serializations that yield "True".
     if "True" in raw_config:
         return raw_config["True"]
     return None
@@ -433,6 +443,13 @@ def _parse_fsm_item(item: dict[str, Any]) -> FSMConfig:
 
 
 def parse_fsm_configs(raw_config: dict[str, Any]) -> list[FSMConfig]:
+    """Leniently parse every FSM in a raw config mapping, skipping invalid ones.
+
+    This is a convenience/test helper. Production setup validates each FSM
+    strictly (``parse_fsm_config_item`` raises on the first problem) because
+    config entries must not be created from broken definitions. This function
+    instead warns and continues so callers can salvage whatever is valid.
+    """
     cfg = FSM_YAML_SCHEMA(raw_config)
     results: list[FSMConfig] = []
     for item in cfg[CONF_FSM]:

@@ -18,6 +18,7 @@ Each configured FSM is exposed as a Home Assistant `select` entity. Triggers det
 - [Triggers](#triggers)
 - [State-centric syntax](#state-centric-syntax)
 - [Explicit transition syntax](#explicit-transition-syntax)
+- [Combining transition styles](#combining-transition-styles)
 - [Guards](#guards)
 - [Global wildcard transitions](#global-wildcard-transitions)
 - [Startup evaluation](#startup-evaluation)
@@ -189,6 +190,18 @@ transitions:
     trigger_id: [motion, button_pressed]
 ```
 
+## Combining transition styles
+
+The three ways to define transitions — state-centric `on:` blocks under `states:`, a `global:` block, and a top-level `transitions:` list — are independent and **can be mixed** in the same FSM.
+
+When they are combined, all of them are merged into a single transition list in this order:
+
+1. State-centric transitions, grouped by state in the order the states are defined.
+2. `global:` transitions.
+3. Top-level `transitions:` list entries.
+
+Matching is then done at runtime: for a given trigger, candidate transitions from the **exact current state** are tried first, before any `from: "*"` (wildcard / `global:`) transitions, and within each group the definition order above decides which is tried first. The first candidate whose guard (if any) evaluates truthy is taken.
+
 ## Guards
 
 A `guard` is a Jinja template (see [Explicit transition syntax](#explicit-transition-syntax)) evaluated each time its transition is a candidate. The transition is taken only when the guard evaluates to a truthy value such as `true`.
@@ -347,7 +360,7 @@ Actions run before the state change is committed. If every action succeeds, the 
 
 Trigger a configured FSM transition manually.
 
-Fields:
+Fields (provide **at least one** of `fsm_id` or `entity_id`; if both, they must refer to the same FSM):
 
 - `fsm_id` or `entity_id`
 - `trigger_id`
@@ -365,7 +378,7 @@ data:
 
 Force the current state immediately, bypassing transition matching, guards, and actions.
 
-Fields:
+Fields (provide **at least one** of `fsm_id` or `entity_id`; if both, they must refer to the same FSM):
 
 - `fsm_id` or `entity_id`
 - `state`
@@ -425,9 +438,9 @@ With `debug: true`, the entity also exposes all additional diagnostic attributes
 
 ## Editor support
 
-A JSON Schema for the `fsm:` configuration array is provided in [`fsm.schema.json`](fsm.schema.json). Editors and linters that support JSON Schema can use it for validation and autocomplete of FSM definitions.
+A JSON Schema for the `fsm:` configuration array is provided in [`fsm.schema.json`](fsm.schema.json). The schema's root is an **array of FSM objects**, so it validates a YAML file whose top level is the list of FSMs (not a full `configuration.yaml`, whose top level is an object containing a `fsm:` key among others). Editors and linters that support JSON Schema can use it for validation and autocomplete of FSM definitions.
 
-For example, in VS Code a YAML file containing the `fsm:` entries can reference it directly:
+For example, a standalone file holding the FSM array can reference it directly:
 
 ```yaml
 # yaml-language-server: $schema=./fsm.schema.json
@@ -445,7 +458,7 @@ For example, in VS Code a YAML file containing the `fsm:` entries can reference 
       trigger_id: arm_home
 ```
 
-When `fsm:` is written inline in `configuration.yaml`, use the schema as a reference for the supported keys.
+When `fsm:` is written inline in `configuration.yaml`, the schema cannot validate the whole file, but it still serves as a reference for the supported keys (or keep the array in its own file and reference the schema there).
 
 ## Limitations
 

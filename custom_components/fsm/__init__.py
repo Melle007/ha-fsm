@@ -58,11 +58,13 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     prepare_hass_data(hass)
     await async_register_services(hass)
 
+    # Home Assistant validates configuration against FSM_YAML_SCHEMA before
+    # calling this, so CONF_FSM is always present (defaulting to an empty list).
+    fsm_configs = config[CONF_FSM]
+
     # Remove config entries for FSMs that have been deleted from YAML.
     # These are "orphan" entries that would otherwise persist as entities.
-    current_fsm_ids = {
-        item[CONF_ID] for item in config.get(CONF_FSM, [])
-    }
+    current_fsm_ids = {item[CONF_ID] for item in fsm_configs}
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.unique_id not in current_fsm_ids:
             _LOGGER.info(
@@ -71,7 +73,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
             )
             await hass.config_entries.async_remove(entry.entry_id)
 
-    if CONF_FSM not in config:
+    if not fsm_configs:
         return True
 
     # Defer config entry creation to avoid deadlock during async_setup.
