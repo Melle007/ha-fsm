@@ -3,12 +3,12 @@ trigger:
   description: Trigger a transition on a finite state machine.
   fields:
     fsm_id:
-      description: Stable FSM id from the configuration.
+      description: Stable FSM id from the configuration. Provide this or `entity_id` (at least one; if both, they must refer to the same FSM).
       example: alarm_mode_fsm
       selector:
         text:
     entity_id:
-      description: Alternative entity id target for the FSM.
+      description: Entity id of the FSM to target. Provide this or `fsm_id` (at least one; if both, they must refer to the same FSM).
       example: select.alarm_mode_fsm
       selector:
         entity:
@@ -25,12 +25,12 @@ set_state:
   description: Force the FSM into a specific state.
   fields:
     fsm_id:
-      description: Stable FSM id from the configuration.
+      description: Stable FSM id from the configuration. Provide this or `entity_id` (at least one; if both, they must refer to the same FSM).
       example: alarm_mode_fsm
       selector:
         text:
     entity_id:
-      description: Alternative entity id target for the FSM.
+      description: Entity id of the FSM to target. Provide this or `fsm_id` (at least one; if both, they must refer to the same FSM).
       example: select.alarm_mode_fsm
       selector:
         entity:

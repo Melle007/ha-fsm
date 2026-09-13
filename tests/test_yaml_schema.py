@@ -4,7 +4,11 @@ import pytest
 import voluptuous as vol
 
 from custom_components.fsm.const import INTERNAL_STARTUP_TRIGGER_ID
-from custom_components.fsm.yaml_schema import parse_fsm_config_item, parse_fsm_configs
+from custom_components.fsm.yaml_schema import (
+    FSM_YAML_SCHEMA,
+    parse_fsm_config_item,
+    parse_fsm_configs,
+)
 
 
 def test_parse_fsm_config_item_rejects_duplicate_states() -> None:
@@ -482,3 +486,19 @@ def test_parse_fsm_config_item_rejects_unknown_state_centric_options(
 
     with pytest.raises(vol.Invalid, match=location):
         parse_fsm_config_item(item)
+
+
+def test_fsm_yaml_schema_defaults_missing_fsm_section_to_empty_list() -> None:
+    # A configuration without an ``fsm:`` section (e.g. the user removed every
+    # FSM) must still validate, so that Home Assistant can run the integration
+    # ``async_setup`` and clean up now-orphaned config entries.
+    validated = FSM_YAML_SCHEMA({"homeassistant": {"name": "Test"}})
+
+    assert validated["fsm"] == []
+    assert validated["homeassistant"] == {"name": "Test"}
+
+
+def test_fsm_yaml_schema_accepts_explicit_empty_fsm_list() -> None:
+    validated = FSM_YAML_SCHEMA({"fsm": []})
+
+    assert validated["fsm"] == []
