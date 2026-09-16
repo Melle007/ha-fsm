@@ -365,6 +365,10 @@ Fields (provide **at least one** of `fsm_id` or `entity_id`; if both, they must 
 - `fsm_id` or `entity_id`
 - `trigger_id`
 
+`trigger_id`, `fsm_id`, and `state` are limited to **255 characters**. Longer values are rejected by the service schema; this keeps oversized payloads out of event data and the recorder database.
+
+`trigger_id` must match the `id` of a configured trigger verbatim: numeric ids sent through the WebSocket API arrive as integers and are rejected, and template syntax in `trigger_id` is never rendered. Quote the id in YAML so it stays a string.
+
 Example:
 
 ```yaml
@@ -460,6 +464,8 @@ For example, a standalone file holding the FSM array can reference it directly:
 
 When `fsm:` is written inline in `configuration.yaml`, the schema cannot validate the whole file, but it still serves as a reference for the supported keys (or keep the array in its own file and reference the schema there).
 
+Each FSM's entities are grouped under a device in the device registry, named after the FSM.
+
 ## Limitations
 
 - Configuration is YAML-first.
@@ -469,6 +475,9 @@ When `fsm:` is written inline in `configuration.yaml`, the schema cannot validat
 - Each FSM must define at least one entry under `triggers:` (even when transitions are only driven by services or the select entity) and at least one transition.
 - `initial_state` must be one of the defined states.
 - State names are used verbatim as the select entity's options: they must be unique, non-empty strings, and YAML keywords such as `ON` and `OFF` need to be quoted.
+- Trigger evaluations are serialized per FSM: while one evaluation for a trigger is still running, further events for that same trigger are coalesced (dropped) rather than queued. State-driven triggers are not affected, and the freshest event supersedes older ones for current-state evaluation.
+- If a trigger fires while the FSM runtime is not yet ready (e.g. during startup before trigger setup completes), that event is silently dropped and logged at debug level; a later event triggers evaluation normally.
+- When calling `fsm.trigger`/`fsm.set_state` through the **REST API**, a validation failure (unknown FSM, invalid state, over-length field) is reported as HTTP `500` instead of `400` — an upstream Home Assistant quirk in REST error mapping; the WebSocket API reports these correctly as `400`/error responses.
 
 ## Getting help
 

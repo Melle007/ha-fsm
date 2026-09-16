@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, TYPE_CHECKING
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
@@ -45,6 +46,17 @@ class FSMEntity(SelectEntity, RestoreEntity):
         self.runtime = runtime
         self._attr_name = runtime.config.name
         self._attr_unique_id = f"{DOMAIN}_{runtime.config.id}"
+        # Group each FSM's entities under a per-FSM device in the device
+        # registry. Device identifiers are scoped per config entry in modern
+        # Home Assistant, and this integration is one FSM per config entry,
+        # so the identifier is aligned with the entity unique_id (fsm_<id>),
+        # which is stable across config-entry reloads.
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{DOMAIN}_{runtime.config.id}")},
+            name=runtime.config.name,
+            manufacturer="FSM integration",
+            model="YAML-defined state machine",
+        )
 
     @property
     def current_option(self) -> str:

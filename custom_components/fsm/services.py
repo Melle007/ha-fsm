@@ -25,6 +25,14 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Guards against oversized service payloads (e.g. multi-kilobyte trigger ids)
+# that would otherwise be echoed into event data and the recorder database.
+_MAX_FIELD_LENGTH = 255
+
+_fsm_id_validator = vol.All(cv.string, vol.Length(max=_MAX_FIELD_LENGTH))
+_trigger_id_validator = vol.All(cv.string, vol.Length(max=_MAX_FIELD_LENGTH))
+_state_validator = vol.All(cv.string, vol.Length(max=_MAX_FIELD_LENGTH))
+
 
 async def async_register_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_TRIGGER):
@@ -83,14 +91,14 @@ async def async_register_services(hass: HomeAssistant) -> None:
     trigger_schema = vol.Schema(
         vol.Any(
             {
-                vol.Required(SERVICE_FIELD_FSM_ID): cv.string,
-                vol.Required(SERVICE_FIELD_TRIGGER_ID): cv.string,
+                vol.Required(SERVICE_FIELD_FSM_ID): _fsm_id_validator,
+                vol.Required(SERVICE_FIELD_TRIGGER_ID): _trigger_id_validator,
                 vol.Optional(SERVICE_FIELD_ENTITY_ID): cv.entity_id,
             },
             {
                 vol.Required(SERVICE_FIELD_ENTITY_ID): cv.entity_id,
-                vol.Required(SERVICE_FIELD_TRIGGER_ID): cv.string,
-                vol.Optional(SERVICE_FIELD_FSM_ID): cv.string,
+                vol.Required(SERVICE_FIELD_TRIGGER_ID): _trigger_id_validator,
+                vol.Optional(SERVICE_FIELD_FSM_ID): _fsm_id_validator,
             },
         )
     )
@@ -98,14 +106,14 @@ async def async_register_services(hass: HomeAssistant) -> None:
     set_state_schema = vol.Schema(
         vol.Any(
             {
-                vol.Required(SERVICE_FIELD_FSM_ID): cv.string,
-                vol.Required(SERVICE_FIELD_STATE): cv.string,
+                vol.Required(SERVICE_FIELD_FSM_ID): _fsm_id_validator,
+                vol.Required(SERVICE_FIELD_STATE): _state_validator,
                 vol.Optional(SERVICE_FIELD_ENTITY_ID): cv.entity_id,
             },
             {
                 vol.Required(SERVICE_FIELD_ENTITY_ID): cv.entity_id,
-                vol.Required(SERVICE_FIELD_STATE): cv.string,
-                vol.Optional(SERVICE_FIELD_FSM_ID): cv.string,
+                vol.Required(SERVICE_FIELD_STATE): _state_validator,
+                vol.Optional(SERVICE_FIELD_FSM_ID): _fsm_id_validator,
             },
         )
     )

@@ -407,7 +407,10 @@ def test_parse_fsm_configs_skips_invalid_fsm() -> None:
 
 
 def test_parse_fsm_config_item_rejects_unknown_fsm_options() -> None:
-    with pytest.raises(vol.Invalid, match="extra keys not allowed"):
+    # volupuous' PREVENT_EXTRA message text varies between versions ("extra keys
+    # not allowed" in <0.16, "not a valid option, did you mean ..." in >=0.16),
+    # so assert on the offending key instead of the exact wording.
+    with pytest.raises(vol.Invalid, match="restore_states"):
         parse_fsm_config_item(
             {
                 "id": "test_fsm",

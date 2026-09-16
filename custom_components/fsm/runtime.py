@@ -33,6 +33,17 @@ _ACTIVE_TRANSITIONS: ContextVar[frozenset[int]] = ContextVar(
     default=frozenset(),
 )
 
+# Event data (and entity attributes) are persisted by the recorder; keep error
+# strings bounded so a misbehaving action cannot flood the database.
+_MAX_ERROR_LENGTH = 512
+
+
+def _truncate_error(error: str) -> str:
+    text = str(error)
+    if len(text) <= _MAX_ERROR_LENGTH:
+        return text
+    return text[:_MAX_ERROR_LENGTH] + "… [truncated]"
+
 
 @dataclass(slots=True)
 class _CompiledTransition:
@@ -377,10 +388,11 @@ class FSMRuntime:
                 rendered_context=chosen_context,
             )
         except Exception as err:
+            error = _truncate_error(str(err))
             await self._async_record_action_failure(
                 trigger_id=trigger_id,
                 transition_id=chosen.id,
-                error=str(err),
+                error=error,
             )
             self.hass.bus.async_fire(
                 EVENT_ACTION_FAILED,
@@ -407,7 +419,7 @@ class FSMRuntime:
             await self._async_record_action_failure(
                 trigger_id=trigger_id,
                 transition_id=chosen.id,
-                error=str(err),
+                error=_truncate_error(str(err)),
             )
             if self.entity:
                 self.entity.async_write_ha_state()
@@ -478,6 +490,7 @@ class FSMRuntime:
         error: str,
     ) -> None:
         async with self._lock:
+            error = _truncate_error(error)
             self.last_error = error
             self.last_action_error = error
             self.last_trigger_id = trigger_id
