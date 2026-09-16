@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.config_entries import ConfigEntryError
 
 from custom_components.fsm import (
     _async_update_listener,
@@ -94,6 +95,55 @@ async def test_platform_setup_failure_rolls_back_registered_runtime(monkeypatch)
         await async_setup_entry(hass, entry)
 
     unregister.assert_awaited_once_with(hass, "test_fsm")
+
+
+@pytest.mark.asyncio
+async def test_setup_entry_success_returns_bool(monkeypatch) -> None:
+    """Regression: async_setup_entry must return a bool.
+
+    Home Assistant (config_entries.py) requires a bool return; a None return
+    (e.g. from a missing `return True`) marks the entry as SETUP_ERROR with
+    "did not return boolean" in the logs and "Failed to set up" in the UI.
+    """
+    config_entries = SimpleNamespace(async_forward_entry_setups=AsyncMock())
+    hass = SimpleNamespace(
+        config_entries=config_entries,
+        data={DOMAIN: {DATA_CONFIGS: {}}},
+    )
+    entry = SimpleNamespace(
+        entry_id="entry-id",
+        data={CONF_ENTRY_DATA_FSM_CONFIG: {CONF_ID: "test_fsm"}},
+        async_on_unload=MagicMock(return_value=lambda: None),
+        add_update_listener=MagicMock(return_value=object()),
+    )
+    fsm_config = SimpleNamespace(id="test_fsm")
+    monkeypatch.setattr(
+        "custom_components.fsm.parse_fsm_config_item",
+        lambda config: fsm_config,
+    )
+    monkeypatch.setattr(
+        "custom_components.fsm.register_fsm",
+        lambda *args, **kwargs: object(),
+    )
+
+    result = await async_setup_entry(hass, entry)
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_setup_entry_duplicate_active_raises_config_entry_error(monkeypatch) -> None:
+    """Duplicate setup of an already-active FSM raises ConfigEntryError."""
+    hass = SimpleNamespace(
+        data={DOMAIN: {DATA_CONFIGS: {"test_fsm": object()}}},
+    )
+    entry = SimpleNamespace(
+        entry_id="entry-id",
+        data={CONF_ENTRY_DATA_FSM_CONFIG: {CONF_ID: "test_fsm"}},
+    )
+
+    with pytest.raises(ConfigEntryError, match="already active"):
+        await async_setup_entry(hass, entry)
 
 
 class _FakeEntry:

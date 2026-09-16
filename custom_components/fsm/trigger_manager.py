@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -23,6 +24,11 @@ class TriggerManager:
         self.hass = hass
         self.runtime = runtime
         self._remove_triggers: list[CALLBACK_TYPE] = []
+        # F2: bound concurrent trigger evaluations. While a handler task for a
+        # given configured trigger is still in flight, further events for that
+        # same trigger are coalesced (dropped) instead of spawning unbounded
+        # concurrent evaluation tasks.
+        self._in_flight: dict[str, asyncio.Task] = {}
 
     def _normalize_trigger_config(self, trigger_config: dict[str, Any]) -> dict[str, Any]:
         """Normalize trigger config before passing it to Home Assistant."""
@@ -133,6 +139,7 @@ class TriggerManager:
         event_type = trigger_config["event_type"]
         trigger_id = trigger_config["id"]
         expected_event_data = trigger_config.get("event_data")
+        in_flight_key = f"event:{trigger_id}"
 
         @callback
         def _event_listener(event: Event) -> None:
@@ -142,7 +149,20 @@ class TriggerManager:
             ):
                 return
 
-            self.hass.async_create_task(
+            # Coalesce: if an evaluation for this trigger is still running,
+            # drop the new event instead of queueing unbounded tasks. Events
+            # carry no state; the freshest one always supersedes older ones
+            # for current-state evaluation, so dropping is safe.
+            existing_task = self._in_flight.get(in_flight_key)
+            if existing_task is not None and not existing_task.done():
+                _LOGGER.debug(
+                    "Coalescing trigger '%s' for FSM '%s'; evaluation already in flight",
+                    trigger_id,
+                    self.runtime.config.id,
+                )
+                return
+
+            task = self.hass.async_create_task(
                 self.runtime.async_handle_trigger(
                     trigger_id,
                     {
@@ -159,6 +179,8 @@ class TriggerManager:
                     allow_queued_reentry=True,
                 )
             )
+            self._in_flight[in_flight_key] = task
+            task.add_done_callback(lambda _task: self._in_flight.pop(in_flight_key, None))
 
         return self.hass.bus.async_listen(event_type, _event_listener)
 
@@ -175,6 +197,7 @@ class TriggerManager:
 
     async def async_unload(self) -> None:
         """Unload all attached triggers."""
+        self._in_flight.clear()
         while self._remove_triggers:
             remove = self._remove_triggers.pop()
             try:

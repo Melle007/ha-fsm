@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryError
 from homeassistant.core import HomeAssistant
 
 from .const import (
@@ -87,7 +87,13 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up FSM from a config entry (created via YAML import)."""
+    """Set up FSM from a config entry (created via YAML import).
+
+    Returns True on success. Failures raise ConfigEntryError, which Home
+    Assistant translates into a "Failed to set up" error reason on the
+    integration card. A plain ``return False`` would be indistinguishable
+    from a bool success contract and lose the error detail.
+    """
     fsm_dict = entry.data[CONF_ENTRY_DATA_FSM_CONFIG]
     fsm_id = fsm_dict[CONF_ID]
 
@@ -98,23 +104,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # an active runtime from inside setup; a duplicate setup attempt must leave
     # the working FSM intact.
     if fsm_id in hass.data[DOMAIN][DATA_CONFIGS]:
-        _LOGGER.error("FSM '%s' is already active; refusing duplicate setup", fsm_id)
-        return False
+        raise ConfigEntryError(
+            f"FSM '{fsm_id}' is already active; refusing duplicate setup"
+        )
 
     try:
         fsm_config = parse_fsm_config_item(fsm_dict)
-    except Exception:
+    except Exception as err:
         _LOGGER.exception("Failed to parse FSM config for entry '%s'", entry.entry_id)
-        return False
+        raise ConfigEntryError(
+            f"Invalid FSM configuration for '{fsm_id}'"
+        ) from err
 
     try:
         entity = register_fsm(hass, fsm_config, from_yaml=False)
-    except Exception:
+    except Exception as err:
         _LOGGER.exception("Failed to register FSM '%s' from config entry", fsm_config.id)
-        return False
+        raise ConfigEntryError(f"Failed to register FSM '{fsm_id}'") from err
 
     if entity is None:
-        return False
+        raise ConfigEntryError(
+            f"FSM '{fsm_id}' is already configured; registration was skipped"
+        )
 
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -123,6 +134,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
     return True
 
 
