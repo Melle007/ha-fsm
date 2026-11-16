@@ -12,7 +12,10 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers.template import Template
-from homeassistant.helpers.trigger import async_initialize_triggers
+from homeassistant.helpers.trigger import (
+    async_initialize_triggers,
+    async_validate_trigger_config,
+)
 
 from .const import DOMAIN
 
@@ -58,21 +61,31 @@ class TriggerManager:
 
         for trig in self.runtime.config.triggers:
             try:
-                trigger_config = self._normalize_trigger_config(
-                    {
-                        "platform": trig.platform,
-                        "id": trig.id,
-                        **trig.config,
-                    }
-                )
+                trigger_config = {
+                    "platform": trig.platform,
+                    "id": trig.id,
+                    **trig.config,
+                }
 
                 if trigger_config["platform"] == "event":
-                    remove = self._attach_event_trigger(trigger_config)
+                    remove = self._attach_event_trigger(
+                        self._normalize_trigger_config(trigger_config)
+                    )
                     self._remove_triggers.append(remove)
                     success_count += 1
                     continue
 
-                remove = await self._attach_ha_trigger(trigger_config, trig.id)
+                # Home Assistant requires validated configs here: new-style
+                # triggers (sun, calendar, entity triggers...) migrate the flat
+                # trigger fields into typed options/target during validation.
+                trigger_config = (
+                    await async_validate_trigger_config(
+                        self.hass, [trigger_config]
+                    )
+                )[0]
+                remove = await self._attach_ha_trigger(
+                    self._normalize_trigger_config(trigger_config), trig.id
+                )
                 self._remove_triggers.append(remove)
                 success_count += 1
 

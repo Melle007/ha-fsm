@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-import voluptuous as vol
+import probatio
 
 from custom_components.fsm.const import INTERNAL_STARTUP_TRIGGER_ID
 from custom_components.fsm.yaml_schema import (
@@ -12,7 +12,7 @@ from custom_components.fsm.yaml_schema import (
 
 
 def test_parse_fsm_config_item_rejects_duplicate_states() -> None:
-    with pytest.raises(vol.Invalid, match="duplicate states"):
+    with pytest.raises(probatio.Invalid, match="duplicate states"):
         parse_fsm_config_item(
             {
                 "id": "test_fsm",
@@ -30,7 +30,7 @@ def test_parse_fsm_config_item_rejects_duplicate_states() -> None:
 
 def test_parse_fsm_config_item_rejects_invalid_initial_state() -> None:
     with pytest.raises(
-        vol.Invalid, match=r"initial_state 'foo' not in states.*Available states: OFF, ON"
+        probatio.Invalid, match=r"initial_state 'foo' not in states.*Available states: OFF, ON"
     ):
         parse_fsm_config_item(
             {
@@ -49,7 +49,7 @@ def test_parse_fsm_config_item_rejects_invalid_initial_state() -> None:
 
 def test_parse_fsm_config_item_rejects_invalid_initial_state_suggests_yaml_boolean() -> None:
     with pytest.raises(
-        vol.Invalid,
+        probatio.Invalid,
         match=r"initial_state 'False' not in states.*accidentally use a YAML boolean",
     ):
         parse_fsm_config_item(
@@ -68,7 +68,7 @@ def test_parse_fsm_config_item_rejects_invalid_initial_state_suggests_yaml_boole
 
 
 def test_parse_fsm_config_item_rejects_reserved_variable_names() -> None:
-    with pytest.raises(vol.Invalid, match="reserved names"):
+    with pytest.raises(probatio.Invalid, match="reserved names"):
         parse_fsm_config_item(
             {
                 "id": "test_fsm",
@@ -341,7 +341,7 @@ def test_parse_fsm_config_item_rejects_yaml_bool_coerced_state_keys() -> None:
         "triggers": [{"id": "go", "platform": "event", "event_type": "go"}],
         "variables": {},
     }
-    with pytest.raises(vol.Invalid, match="state names must be strings.*YAML"):
+    with pytest.raises(probatio.Invalid, match="state names must be strings.*YAML"):
         parse_fsm_config_item(config)
 
 
@@ -355,7 +355,7 @@ def test_parse_fsm_config_item_rejects_unquoted_yaml_boolean_state_list() -> Non
         "transitions": [{"from": False, "to": True, "trigger_id": "go"}],
     }
 
-    with pytest.raises(vol.Invalid, match="state names must be strings"):
+    with pytest.raises(probatio.Invalid, match="state names must be strings"):
         parse_fsm_config_item(config)
 
 
@@ -374,7 +374,7 @@ def test_parse_fsm_config_item_rejects_invalid_state_centric_trigger_id(
         "triggers": [{"id": "go", "platform": "event", "event_type": "go"}],
     }
 
-    with pytest.raises(vol.Invalid, match="trigger_id must be"):
+    with pytest.raises(probatio.Invalid, match="trigger_id must be"):
         parse_fsm_config_item(config)
 
 
@@ -410,7 +410,7 @@ def test_parse_fsm_config_item_rejects_unknown_fsm_options() -> None:
     # volupuous' PREVENT_EXTRA message text varies between versions ("extra keys
     # not allowed" in <0.16, "not a valid option, did you mean ..." in >=0.16),
     # so assert on the offending key instead of the exact wording.
-    with pytest.raises(vol.Invalid, match="restore_states"):
+    with pytest.raises(probatio.Invalid, match="restore_states"):
         parse_fsm_config_item(
             {
                 "id": "test_fsm",
@@ -487,7 +487,7 @@ def test_parse_fsm_config_item_rejects_unknown_state_centric_options(
     }
     item[field] = value
 
-    with pytest.raises(vol.Invalid, match=location):
+    with pytest.raises(probatio.Invalid, match=location):
         parse_fsm_config_item(item)
 
 

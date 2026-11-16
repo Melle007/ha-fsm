@@ -101,6 +101,9 @@ async def test_trigger_setup_error_contains_structured_context(
         raise RuntimeError("boom")
 
     with patch(
+        "custom_components.fsm.trigger_manager.async_validate_trigger_config",
+        new=AsyncMock(side_effect=lambda hass, configs: configs),
+    ), patch(
         "custom_components.fsm.trigger_manager.async_initialize_triggers",
         new=AsyncMock(side_effect=_raise),
     ):
@@ -110,6 +113,30 @@ async def test_trigger_setup_error_contains_structured_context(
     assert len(runtime.trigger_attach_errors) == 1
     assert "platform=state" in runtime.trigger_attach_errors[0]
     assert "fsm_id=test_fsm" in runtime.trigger_attach_errors[0]
+
+
+@pytest.mark.asyncio
+async def test_trigger_config_is_validated_before_attach(
+    runtime_config: FSMConfig,
+) -> None:
+    runtime_config.triggers = [
+        TriggerConfig(id="sunset", platform="sun", config={"event": "sunset"})
+    ]
+    runtime = FSMRuntime(_FakeHass(), runtime_config)
+    manager = TriggerManager(runtime.hass, runtime)
+    validated = {"platform": "sun", "id": "sunset", "options": {"event": "sunset"}}
+
+    with patch(
+        "custom_components.fsm.trigger_manager.async_validate_trigger_config",
+        new=AsyncMock(return_value=[validated]),
+    ) as validate, patch(
+        "custom_components.fsm.trigger_manager.async_initialize_triggers",
+        new=AsyncMock(return_value=lambda: None),
+    ) as initialize:
+        await manager.async_setup()
+
+    validate.assert_awaited_once()
+    assert initialize.await_args.args[1] == [validated]
 
 
 @pytest.mark.asyncio
